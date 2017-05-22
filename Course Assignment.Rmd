@@ -1,0 +1,139 @@
+---
+title: "Practical Machine Learning Assignment"
+author: "Chen Fuwei"
+date: "22 May 2017"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+## Introduction
+
+This report describes how a model was built to predict the manner in which participants performed barbell lifts. This is based on data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants, who were asked to perform barbell lifts correctly and incorrectly in 5 different ways - exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). The prediction model was also used to predict 20 different test cases.
+
+##Data Loading and Exploratory Analysis
+
+The relevant working directory was set and the necessary R libraries uploaded.
+
+```{r}
+setwd("C:/Users/Admin/Desktop/Data Science/8. Machine Learning")
+library(knitr)
+library(lattice)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RGtk2)
+library(rattle)
+library(randomForest)
+library(corrplot)
+set.seed(54321)
+```
+
+The dataset was downloaded from the relevant URL. The training dataset was then partitioned into two to create a Training set (60% of the data) for the modelling process and a Test set (with the remaining 40%) for validation. The testing dataset was not changed and would be used to generate the quiz results.
+
+```{r}
+# setting the url for data download
+TrainUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+TestUrl  <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+# downloading the datasets
+training <- read.csv(url(TrainUrl))
+testing  <- read.csv(url(TestUrl))
+
+# partitioning the training dataset 
+inTrain  <- createDataPartition(training$classe, p=0.6, list=FALSE)
+TrainSet <- training[inTrain, ]
+TestSet  <- training[-inTrain, ]
+dim(TrainSet)
+```
+
+Data was cleaned to remove variables with near zero variance or mostly NA values, as well as identification variables.
+
+```{r}
+# removing variables with near zero variance
+nzerovar <- nearZeroVar(TrainSet)
+TrainSet <- TrainSet[, -nzerovar]
+TestSet  <- TestSet[, -nzerovar]
+dim(TrainSet)
+dim(TestSet)
+# removing variables that with mostly NA values
+MostlyNA    <- sapply(TrainSet, function(x) mean(is.na(x))) > 0.95
+TrainSet <- TrainSet[, MostlyNA==FALSE]
+TestSet  <- TestSet[, MostlyNA==FALSE]
+dim(TrainSet)
+dim(TestSet)
+# removing ID variables (columns 1 to 5)
+TrainSet <- TrainSet[, -(1:5)]
+TestSet  <- TestSet[, -(1:5)]
+dim(TrainSet)
+dim(TestSet)
+```
+
+## Model Building
+
+Three methods were applied to model the regressions (in the Train dataset) and the best one (with the highest accuracy when applied to the Test dataset) would be used for the quiz predictions. The methods used wre: Random Forest, Decision Tree and Generalized Boosted Model. Confusion Matrices were derived to ascertain the accuracy of the models.
+
+### Random Forest Model
+
+```{r}
+# model fit
+set.seed(54321)
+ctrlRF <- trainControl(method="cv", number=3, verboseIter=FALSE)
+modRF <- train(classe ~ ., data=TrainSet, method="rf",
+                          trControl=ctrlRF)
+modRF$finalModel
+# prediction on Test dataset
+predictRF <- predict(modRF, newdata=TestSet)
+confMatRF <- confusionMatrix(predictRF, TestSet$classe)
+confMatRF
+# plot matrix results
+plot(confMatRF$table, col = confMatRF$byClass, 
+     main = paste("Random Forest - Accuracy =",
+                  round(confMatRF$overall['Accuracy'], 4)))
+```
+
+### Decision Tree Model
+
+```{r}
+# model fit
+set.seed(54321)
+modDT <- rpart(classe ~ ., data=TrainSet, method="class")
+fancyRpartPlot(modDT)
+# prediction on Test dataset
+predictDT <- predict(modDT, newdata=TestSet, type="class")
+confMatDT <- confusionMatrix(predictDT, TestSet$classe)
+confMatDT
+# plot matrix results
+plot(confMatDT$table, col = confMatDT$byClass, 
+     main = paste("Decision Tree - Accuracy =",
+                  round(confMatDT$overall['Accuracy'], 4)))
+```
+
+### Generalised Boosted Model
+
+```{r}
+# model fit
+set.seed(54321)
+ctrlGBM <- trainControl(method = "repeatedcv", number = 5, repeats = 1)
+modGBM  <- train(classe ~ ., data=TrainSet, method = "gbm",
+                    trControl = ctrlGBM, verbose = FALSE)
+modGBM$finalModel
+# prediction on Test dataset
+predictGBM <- predict(modGBM, newdata=TestSet)
+confMatGBM <- confusionMatrix(predictGBM, TestSet$classe)
+confMatGBM
+# plot matrix results
+plot(confMatGBM$table, col = confMatGBM$byClass, 
+     main = paste("GBM - Accuracy =", 
+                  round(confMatGBM$overall['Accuracy'], 4)))
+```
+
+## Application to Test Data
+
+The Random Forest model had the highest accuracy at 99.75%, and was applied to predict the 20 test cases. The expected out-of-sample error was 100-99.75=0.25%.
+
+```{r}
+predictTEST <- predict(modRF, newdata=testing)
+predictTEST
+```
+
