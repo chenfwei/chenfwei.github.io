@@ -1,1 +1,1 @@
-The HTML file can be accessed by clicking this link: https://chenfwei.github.io/.
+Click <a href "https://chenfwei.github.io/."> here </a> to access writeup.
